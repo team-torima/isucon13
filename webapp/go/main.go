@@ -3,6 +3,8 @@ package main
 // ISUCON的な参考: https://github.com/isucon/isucon12-qualify/blob/main/webapp/go/isuports.go#L336
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
+import _ "net/http/pprof"
+
 import (
 	"fmt"
 	"log"
@@ -119,6 +121,10 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
+	go func() {
+		fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	e := echo.New()
 	e.Debug = true
 	e.Logger.SetLevel(echolog.DEBUG)
