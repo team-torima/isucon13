@@ -399,34 +399,56 @@ func verifyUserSession(c echo.Context) error {
 }
 
 func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (User, error) {
-	themeModel := ThemeModel{}
-	if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
+	query := `
+        SELECT 
+            u.id AS user_id,
+            u.name AS user_name,
+            u.display_name AS user_display_name,
+            u.description AS user_description,
+            t.id AS theme_id,
+            t.dark_mode AS theme_dark_mode,
+            COALESCE(i.image, '') AS icon_image
+        FROM users u
+        LEFT JOIN themes t ON u.id = t.user_id
+        LEFT JOIN icons i ON u.id = i.user_id
+        WHERE u.id = ?
+    `
+
+	var result struct {
+		UserID          int64  `db:"user_id"`
+		UserName        string `db:"user_name"`
+		UserDisplayName string `db:"user_display_name"`
+		UserDescription string `db:"user_description"`
+		ThemeID         int64  `db:"theme_id"`
+		ThemeDarkMode   bool   `db:"theme_dark_mode"`
+		IconImage       []byte `db:"icon_image"`
+	}
+
+	if err := tx.GetContext(ctx, &result, query, userModel.ID); err != nil {
 		return User{}, err
 	}
 
-	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return User{}, err
-		}
-		image, err = os.ReadFile(fallbackImage)
+	// アイコンデータが空の場合はデフォルトのアイコンを使用
+	iconHash := ""
+	if len(result.IconImage) == 0 {
+		defaultImage, err := os.ReadFile(fallbackImage)
 		if err != nil {
 			return User{}, err
 		}
+		iconHash = fmt.Sprintf("%x", sha256.Sum256(defaultImage))
+	} else {
+		iconHash = fmt.Sprintf("%x", sha256.Sum256(result.IconImage))
 	}
-	iconHash := sha256.Sum256(image)
 
-	user := User{
-		ID:          userModel.ID,
-		Name:        userModel.Name,
-		DisplayName: userModel.DisplayName,
-		Description: userModel.Description,
+	return User{
+		ID:          result.UserID,
+		Name:        result.UserName,
+		DisplayName: result.UserDisplayName,
+		Description: result.UserDescription,
 		Theme: Theme{
-			ID:       themeModel.ID,
-			DarkMode: themeModel.DarkMode,
+			ID:       result.ThemeID,
+			DarkMode: result.ThemeDarkMode,
 		},
-		IconHash: fmt.Sprintf("%x", iconHash),
-	}
-
-	return user, nil
+		IconHash: iconHash,
+	}, nil
 }
