@@ -485,36 +485,41 @@ func getLivecommentReportsHandler(c echo.Context) error {
 }
 
 func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel LivestreamModel) (Livestream, error) {
-	ownerModel := UserModel{}
-	if err := tx.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
-		return Livestream{}, err
+	var results []struct {
+		LivestreamID int64  `db:"livestream_id"`
+		UserID       int64  `db:"user_id"`
+		UserName     string `db:"user_name"`
+		TagID        int64  `db:"tag_id"`
+		TagName      string `db:"tag_name"`
 	}
-	owner, err := fillUserResponse(ctx, tx, ownerModel)
-	if err != nil {
+
+	query := `
+        SELECT 
+            l.id AS livestream_id,
+            u.id AS user_id,
+            u.name AS user_name,
+            t.id AS tag_id,
+            t.name AS tag_name
+        FROM livestreams l
+        JOIN users u ON l.user_id = u.id
+        LEFT JOIN livestream_tags lt ON l.id = lt.livestream_id
+        LEFT JOIN tags t ON lt.tag_id = t.id
+        WHERE l.id = ?
+    `
+	if err := tx.SelectContext(ctx, &results, query, livestreamModel.ID); err != nil {
 		return Livestream{}, err
 	}
 
-	var livestreamTagModels []*LivestreamTagModel
-	if err := tx.SelectContext(ctx, &livestreamTagModels, "SELECT * FROM livestream_tags WHERE livestream_id = ?", livestreamModel.ID); err != nil {
-		return Livestream{}, err
-	}
-
-	tags := make([]Tag, len(livestreamTagModels))
-	for i := range livestreamTagModels {
-		tagModel := TagModel{}
-		if err := tx.GetContext(ctx, &tagModel, "SELECT * FROM tags WHERE id = ?", livestreamTagModels[i].TagID); err != nil {
-			return Livestream{}, err
-		}
-
-		tags[i] = Tag{
-			ID:   tagModel.ID,
-			Name: tagModel.Name,
+	var tags []Tag
+	for _, result := range results {
+		if result.TagID != 0 {
+			tags = append(tags, Tag{ID: result.TagID, Name: result.TagName})
 		}
 	}
 
 	livestream := Livestream{
 		ID:           livestreamModel.ID,
-		Owner:        owner,
+		Owner:        User{ID: results[0].UserID, Name: results[0].UserName},
 		Title:        livestreamModel.Title,
 		Tags:         tags,
 		Description:  livestreamModel.Description,
