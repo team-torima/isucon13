@@ -106,3 +106,17 @@ CREATE TABLE `reactions` (
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 ALTER TABLE livestream_tags add index livestream_id_idx(livestream_id);
+ALTER TABLE icons add index user_id_idx(user_id);
+ALTER TABLE themes add index user_id_idx(user_id);
+ALTER TABLE livestreams add index user_id_idx(user_id);
+ALTER TABLE reservation_slots add index slot_idx(slot);
+ALTER TABLE livestream_viewers_history add index user_id_idx(user_id);
+ALTER TABLE livestream_tags add index tag_id_idx(tag_id);
+ALTER TABLE livecomments add index user_id_idx(user_id);
+ALTER TABLE livecomments add index livestream_id_idx(livestream_id);
+ALTER TABLE livecomment_reports add index user_id_idx(user_id);
+ALTER TABLE livecomment_reports add index livecomment_id_idx(livecomment_id);
+ALTER TABLE ng_words add index user_id_idx(user_id);
+ALTER TABLE ng_words add index livestream_id_idx(livestream_id);
+ALTER TABLE reactions add index user_id_idx(user_id);
+ALTER TABLE reactions add index livestream_id_idx(livestream_id);
