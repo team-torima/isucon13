@@ -69,6 +69,7 @@ func getLivecommentsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	if err := verifyUserSession(c); err != nil {
+		// echo.NewHTTPErrorが返っているのでそのまま出力
 		return err
 	}
 
@@ -101,57 +102,14 @@ func getLivecommentsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
 	}
 
-	// 関連するuserとlivestreamを一括取得
-	userIDs := make([]int64, 0)
-	livestreamIDs := make([]int64, 0)
-	for _, lc := range livecommentModels {
-		userIDs = append(userIDs, lc.UserID)
-		livestreamIDs = append(livestreamIDs, lc.LivestreamID)
-	}
-
-	users := []UserModel{}
-	err = tx.SelectContext(ctx, &users, "SELECT * FROM users WHERE id IN (?)", userIDs)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
-	}
-
-	livestreams := []LivestreamModel{}
-	err = tx.SelectContext(ctx, &livestreams, "SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
-	}
-
-	// IDとモデルのマッピング
-	userMap := make(map[int64]UserModel)
-	for _, user := range users {
-		userMap[user.ID] = user
-	}
-
-	livestreamMap := make(map[int64]LivestreamModel)
-	for _, livestream := range livestreams {
-		livestreamMap[livestream.ID] = livestream
-	}
-
-	// レスポンスの作成
 	livecomments := make([]Livecomment, len(livecommentModels))
-	for i, lc := range livecommentModels {
-		commentOwner := userMap[lc.UserID]
-		livestream := livestreamMap[lc.LivestreamID]
-
-		livecomments[i] = Livecomment{
-			ID: lc.ID,
-			User: User{
-				ID:   commentOwner.ID,
-				Name: commentOwner.Name,
-			},
-			Livestream: Livestream{
-				ID:    livestream.ID,
-				Title: livestream.Title,
-			},
-			Comment:   lc.Comment,
-			Tip:       lc.Tip,
-			CreatedAt: lc.CreatedAt,
+	for i := range livecommentModels {
+		livecomment, err := fillLivecommentResponse(ctx, tx, livecommentModels[i])
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
 		}
+
+		livecomments[i] = livecomment
 	}
 
 	if err := tx.Commit(); err != nil {
